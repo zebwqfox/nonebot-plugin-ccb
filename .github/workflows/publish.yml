@@ -1,0 +1,42 @@
+name: Publish to PyPI
+
+# 推送 v* 標籤（例如 v0.1.0）時自動建置並發布到 PyPI。
+# 使用 PyPI Trusted Publishing（OIDC），不需要在倉庫裡存 PyPI token。
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/nonebot-plugin-ccb
+    permissions:
+      id-token: write # Trusted Publishing 需要
+      contents: write # 建立 GitHub Release 需要
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Check tag matches pyproject version
+        run: |
+          version=$(uv version --short)
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} 和 pyproject.toml 版本 ${version} 不一致"
+            exit 1
+          fi
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --title "${GITHUB_REF_NAME}" --generate-notes
